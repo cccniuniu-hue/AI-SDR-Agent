@@ -73,6 +73,10 @@ def shown(value):
     return "未知 / null" if value is None else str(value)
 
 
+def timestamp_label(value):
+    return datetime.fromisoformat(value).isoformat(timespec="seconds")
+
+
 def page_heading(title, description):
     st.markdown(
         f'<div class="page-heading"><h1>{escape(title)}</h1><p>{escape(description)}</p></div>',
@@ -472,7 +476,7 @@ def render_history(repo, run):
         st.info("尚无人工修改记录。")
     for event in history:
         with st.expander(
-            f"v{event['from_version']} → v{event['to_version']} · {event['reviewer']} · {event['created_at']}"
+            f"v{event['from_version']} → v{event['to_version']} · {event['reviewer']} · {timestamp_label(event['created_at'])}"
         ):
             st.text("操作：" + ("审核通过" if event["action"] == "approve" else "人工修正"))
             st.text("说明：" + event["reason"])
@@ -543,7 +547,7 @@ def render_run(repo, run):
         with st.expander("查看 15 字段 JSON"):
             st.json(current)
         with st.expander("查看原始机器结果与版本"):
-            st.caption(f"记录 {run['run_id']} · 创建于 {run['created_at']}")
+            st.caption(f"记录 {run['run_id']} · 创建于 {timestamp_label(run['created_at'])}")
             st.caption(
                 f"耗时 {analysis.get('elapsed_ms', 0) / 1000:.1f} 秒 · 模型请求 {analysis.get('request_count', 0)} 次"
             )
@@ -766,7 +770,7 @@ def history_page(repo):
                 "意向": INTENTS[(run["current"] or {}).get("intent_level")],
                 "分析状态": STATUSES.get(run["run_status"], run["run_status"]),
                 "审核状态": REVIEWS[run["review_status"]],
-                "创建时间": run["created_at"],
+                "创建时间": timestamp_label(run["created_at"]),
                 "记录编号": run["run_id"],
             }
             for run in filtered
