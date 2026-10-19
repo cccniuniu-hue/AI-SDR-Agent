@@ -39,7 +39,7 @@ FIELDS = {
     "shejishi": "设计师人数",
     "call_time": "通话时间",
     "next_action": "下一步行动",
-    "confidence_score": "机器质量分",
+    "confidence_score": "置信度",
     "need_human_review": "需人工审核",
 }
 SIGNALS = {
@@ -292,9 +292,9 @@ def render_preview(repo, key, label):
 
 def edit_form(repo, run):
     current, original = run["current"], run["original"] or {}
-    st.caption("空白字段保存为 null。机器质量分保留原始评估；人工审核状态另行记录。")
+    st.caption("空白字段保存为 null。置信度保留原始评估；人工审核状态另行记录。")
     score = original.get("confidence_score")
-    st.text(f"原始机器质量分：{score:.0%}" if score is not None else "原始机器质量分：未知")
+    st.text(f"原始置信度：{score:.0%}" if score is not None else "原始置信度：未知")
     key = "single_preview_" + run["run_id"]
     with st.form("edit_" + run["run_id"] + "_" + str(run["version"])):
         values = {}
@@ -511,7 +511,7 @@ def render_run(repo, run):
         f"<small>{escape(REVIEWS[run['review_status']])} · v{run['version']}</small></div>"
         '<div class="lead-stat"><span>意向等级</span>'
         f"<strong>{INTENTS[current['intent_level']]}</strong><small>当前线索意向</small></div>"
-        '<div class="lead-stat"><span>机器质量分</span>'
+        '<div class="lead-stat"><span>置信度</span>'
         f"<strong>{score_label}</strong><small>原始评估 · 非购买概率</small></div></div>",
         unsafe_allow_html=True,
     )
