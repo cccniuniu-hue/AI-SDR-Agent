@@ -37,6 +37,8 @@ class DeepSeekClient:
                 "Content-Type": "application/json",
             },
             transport=transport,
+            # Keep provider requests independent of system/environment proxy changes.
+            trust_env=False,
             follow_redirects=False,
         )
 

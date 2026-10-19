@@ -1,5 +1,7 @@
 import json
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
@@ -17,6 +19,74 @@ def client_for(handler):
     return DeepSeekClient(
         Settings(api_key="secret-test-key"), transport=httpx.MockTransport(handler)
     )
+
+
+@pytest.fixture
+def local_api_and_proxy():
+    received = {"api": [], "proxy": []}
+    servers, threads = [], []
+
+    def start(role):
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                received[role].append(self.path)
+                if self.path == "/chat/completions":
+                    payload = response('{"facts": {}}')
+                elif self.path == "/v1/tools/search":
+                    payload = {"results": []}
+                else:
+                    payload = {"url": "https://example.com", "content": "公司资料"}
+                body = json.dumps(payload).encode()
+                self.send_response(403 if role == "proxy" else 200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        servers.append(server)
+        threads.append(thread)
+        return f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        yield start("api"), start("proxy"), received
+    finally:
+        for server, thread in zip(servers, threads):
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+@pytest.mark.parametrize("proxy_source", ["environment", "system"])
+def test_all_deepseek_endpoints_ignore_external_proxy_settings(
+    monkeypatch, local_api_and_proxy, proxy_source
+):
+    api_url, proxy_url, received = local_api_and_proxy
+    if proxy_source == "environment":
+        for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+            monkeypatch.delenv(name.lower(), raising=False)
+            monkeypatch.setenv(name, proxy_url)
+        monkeypatch.delenv("NO_PROXY", raising=False)
+        monkeypatch.delenv("no_proxy", raising=False)
+    else:
+        # Simulate proxy discovery from the OS, independently of the test runner's platform.
+        monkeypatch.setattr(
+            "httpx._utils.getproxies", lambda: {"http": proxy_url, "https": proxy_url}
+        )
+    with DeepSeekClient(Settings(api_key="test-key-not-real", base_url=api_url)) as client:
+        deadline = time.monotonic() + 10
+        assert client.extract(AnalysisInput(transcript="客户：你好"), deadline).facts == {}
+        assert client.search("测试公司", deadline) == []
+        assert client.fetch("https://example.com", deadline).content == "公司资料"
+        assert client.request_count == 3
+    assert received["api"] == ["/chat/completions", "/v1/tools/search", "/v1/tools/fetch"]
+    assert received["proxy"] == []
 
 
 def test_extract_uses_configured_model_json_mode_and_disabled_thinking():

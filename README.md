@@ -59,6 +59,8 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item -LiteralPath .env.example -D
 
 系统环境变量优先于 `.env`。修改配置后重启应用。密钥不会显示在页面或写入导出；`.env`、本地数据库和 `.data/` 已被 Git 忽略。
 
+DeepSeek 客户端固定使用直连：聊天、Search 和 Fetch 请求都忽略 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 和系统代理设置，TLS 证书校验保持开启。若代理软件启用了 TUN/VPN 全局接管，仍需在该软件中为 `api.deepseek.com` 设置直连规则；应用级直连无法绕过系统网络隧道。更改 `DEEPSEEK_BASE_URL` 时，相应服务地址也需要能直连访问。
+
 聊天使用 `/chat/completions` 的 JSON 输出；企业查询独立调用 DeepSeek Search `/v1/tools/search` 和 Fetch `/v1/tools/fetch`，不是普通聊天自动联网。实际模型及搜索能力取决于账户和服务配置，实测情况见[评测报告](docs/evaluation-report.md)。搜索失败、证据不足或多主体歧义时不猜公司名，保留 `null` 和复核原因。请求设有超时、有限重试与总时限，彻底失败的分析不会生成可编辑、可导出的正常线索。
 
 点击分析会将通话文本发送给已配置的 DeepSeek 服务；查询企业时会发送相应检索信息。原文及结果保存在本机 SQLite 中。该程序是本地工具，默认仅监听 `127.0.0.1`。
