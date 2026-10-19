@@ -1,0 +1,53 @@
+[
+  {
+    "company_name": null,
+    "industry": null,
+    "area": null,
+    "contact_name": null,
+    "contact_title": null,
+    "phone": null,
+    "intent_level": null,
+    "intent_reason": "证据不足，不能将信息缺失等同于低意向。 未知：痛点、时间、预算、行动、规模。",
+    "demand_summary": null,
+    "mendian": null,
+    "shejishi": null,
+    "call_time": null,
+    "next_action": "人工核对原文，补充企业主体、实际需求及采购计划。",
+    "confidence_score": null,
+    "need_human_review": false
+  },
+  {
+    "company_name": null,
+    "industry": null,
+    "area": null,
+    "contact_name": null,
+    "contact_title": null,
+    "phone": null,
+    "intent_level": "low",
+    "intent_reason": "客户明确拒绝当前采购推进：不需要，目前没有采购需求，请不要再联系。 依据：痛点：不需要，目前没有采购需求，请不要再联系。；时间：不需要，目前没有采购需求，请不要再联系。；行动：不需要，目前没有采购需求，请不要再联系。 未知：预算、规模。",
+    "demand_summary": null,
+    "mendian": null,
+    "shejishi": null,
+    "call_time": null,
+    "next_action": "尊重客户当前意愿，记录原因；如客户同意，再安排后续联系。",
+    "confidence_score": null,
+    "need_human_review": false
+  },
+  {
+    "company_name": "杭州群核信息技术有限公司",
+    "industry": "室内设计软件",
+    "area": "杭州",
+    "contact_name": "李明",
+    "contact_title": "项目经理",
+    "phone": null,
+    "intent_level": "high",
+    "intent_reason": "明确痛点、时间或预算及推进信号支持高意向。 依据：痛点：出图太慢影响交付；时间：希望下个月试用；预算：预算一年五万元已经批准；行动：请给我们安排演示；规模：我们有20位设计师",
+    "demand_summary": "客户希望解决出图慢影响交付的问题，计划下个月试用，并请求安排演示。",
+    "mendian": null,
+    "shejishi": 20,
+    "call_time": "2026-10-19T10:00:00+08:00",
+    "next_action": "与项目经理确认演示时间，并针对20位设计师的出图流程准备试用方案。",
+    "confidence_score": 0.93,
+    "need_human_review": false
+  }
+]

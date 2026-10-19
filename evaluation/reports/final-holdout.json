@@ -1,0 +1,158 @@
+{
+  "version": "evaluation-1.0",
+  "mode": "live",
+  "is_model_evaluation": true,
+  "notice": "真实 API 调用；样本为合成对话，结果不能推及真实业务分布。",
+  "dataset": "evaluation/holdout.jsonl",
+  "dataset_hash": "614fbeac8d5988af711989e15a25fb4795b34811952579ef635865d36451e564",
+  "split": "holdout",
+  "samples": 12,
+  "configuration": "8a1a3cc7e189234fdcd9677799f244ad92d11f9ca22a9243e76887760e6afdc6",
+  "model": "deepseek-flash",
+  "completed_records": 24,
+  "expected_records": 24,
+  "complete": true,
+  "updated_at": "2026-10-19T10:48:57.249958+00:00",
+  "ledger": "evaluation/reports/final-holdout.samples.jsonl",
+  "database": null,
+  "metrics": {
+    "workflow": {
+      "samples": 12,
+      "successful": 12,
+      "failures": 0,
+      "partial": 0,
+      "intent": {
+        "four_class_accuracy": 1.0,
+        "known_macro_f1": 1.0,
+        "known_denominator": 9,
+        "per_class": {
+          "high": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          },
+          "medium": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          },
+          "low": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          }
+        },
+        "null_retention": 1.0,
+        "null_denominator": 3
+      },
+      "company": {
+        "precision": null,
+        "coverage": null,
+        "precision_denominator": 0,
+        "coverage_denominator": 0,
+        "correct_confirmations": 0,
+        "false_confirmations": 0,
+        "unknown_gold_confirmations": 0,
+        "confirmation_rate": 0.0
+      },
+      "fields": {
+        "errors": 0,
+        "compared": 120,
+        "error_rate": 0.0,
+        "invented_nonnull": 0,
+        "missing_known": 0,
+        "by_field": {}
+      },
+      "review": {
+        "count": 12,
+        "denominator": 12,
+        "rate": 1.0
+      },
+      "latency_ms": {
+        "total": 29967,
+        "mean": 2497.25,
+        "median": 2163.0,
+        "p95": 4859
+      },
+      "requests": {
+        "total": 18,
+        "mean": 1.5
+      }
+    },
+    "baseline": {
+      "samples": 12,
+      "successful": 12,
+      "failures": 0,
+      "partial": 0,
+      "intent": {
+        "four_class_accuracy": 1.0,
+        "known_macro_f1": 1.0,
+        "known_denominator": 9,
+        "per_class": {
+          "high": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          },
+          "medium": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          },
+          "low": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "support": 3,
+            "f1": 1.0
+          }
+        },
+        "null_retention": 1.0,
+        "null_denominator": 3
+      },
+      "company": {
+        "precision": null,
+        "coverage": null,
+        "precision_denominator": 0,
+        "coverage_denominator": 0,
+        "correct_confirmations": 0,
+        "false_confirmations": 0,
+        "unknown_gold_confirmations": 0,
+        "confirmation_rate": 0.0
+      },
+      "fields": {
+        "errors": 0,
+        "compared": 120,
+        "error_rate": 0.0,
+        "invented_nonnull": 0,
+        "missing_known": 0,
+        "by_field": {}
+      },
+      "review": {
+        "count": 10,
+        "denominator": 12,
+        "rate": 0.8333333333333334
+      },
+      "latency_ms": {
+        "total": 16023,
+        "mean": 1335.25,
+        "median": 1288.0,
+        "p95": 1889
+      },
+      "requests": {
+        "total": 12,
+        "mean": 1
+      }
+    }
+  }
+}
