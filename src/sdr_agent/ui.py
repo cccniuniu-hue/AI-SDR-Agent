@@ -73,10 +73,9 @@ def shown(value):
     return "未知 / null" if value is None else str(value)
 
 
-def page_heading(eyebrow, title, description):
+def page_heading(title, description):
     st.markdown(
-        f'<div class="page-heading"><div class="eyebrow">{escape(eyebrow)}</div>'
-        f"<h1>{escape(title)}</h1><p>{escape(description)}</p></div>",
+        f'<div class="page-heading"><h1>{escape(title)}</h1><p>{escape(description)}</p></div>',
         unsafe_allow_html=True,
     )
 
@@ -511,18 +510,12 @@ def render_run(repo, run):
 
 def workbench(settings, repo):
     page_heading(
-        "AI SDR / 分析工作台",
         "把通话，变成下一步。",
         "从客户原话中提取事实、核实企业、判断意向，让每条线索都有据可查。",
     )
-    st.markdown(
-        '<div class="workflow-strip"><span><b>01</b> 输入通话</span><span class="arrow">→</span>'
-        '<span><b>02</b> 分析与核实</span><span class="arrow">→</span><span><b>03</b> 审核并导出</span></div>',
-        unsafe_allow_html=True,
-    )
     with st.container(key="workbench_layout"):
-        input_col, guide_col = st.columns([1.9, 1], gap="large")
-        with input_col, st.container(key="input_card", border=True):
+        input_col, guide_col = st.columns([2.1, 1], gap="large")
+        with input_col, st.container(key="input_card", border=False):
             st.subheader("通话文本", anchor=False)
             st.caption("保留说话人标记，帮助区分客户事实与销售介绍。")
             examples_path = Path(__file__).resolve().parents[2] / "examples" / "transcripts.jsonl"
@@ -545,30 +538,32 @@ def workbench(settings, repo):
                 text = st.text_area(
                     "粘贴通话文本",
                     key="text",
-                    height=260,
+                    height=300,
                     max_chars=20000,
                     placeholder="销售：您好，想了解一下您目前的业务需求。\n\n客户：我们目前有……",
                     help="建议保留客户与销售的说话人标记，最多 20,000 字。",
                 )
-                call_time = st.text_input(
+                time_col, action_col = st.columns([1.6, 1], vertical_alignment="bottom")
+                call_time = time_col.text_input(
                     "通话时间（可选）",
                     placeholder="2026-10-19T14:30:00+08:00",
                     help="使用带时区的 ISO 8601 时间；未知时留空。",
                 )
-                submitted = st.form_submit_button(
-                    "开始分析", type="primary", disabled=not settings.api_key, width="stretch"
-                )
+                with action_col:
+                    submitted = st.form_submit_button(
+                        "开始分析", type="primary", disabled=not settings.api_key, width="stretch"
+                    )
             st.caption("提交后由 DeepSeek 分析文本，结果和审核记录保存在本机。")
         with guide_col:
             st.markdown(
-                '<aside class="guide-card"><div class="eyebrow">从原话到线索</div>'
-                '<h3>每一个判断，<br>都留有依据。</h3><div class="guide-steps">'
-                '<div class="guide-step"><span class="step-number">01</span><div><strong>提取客户事实</strong>'
-                "<p>整理联系人、业务规模与需求，区分客户表述和销售介绍。</p></div></div>"
-                '<div class="guide-step"><span class="step-number">02</span><div><strong>核实企业与意向</strong>'
-                "<p>结合企业来源和原文信号，展示判断依据与不确定项。</p></div></div>"
-                '<div class="guide-step"><span class="step-number">03</span><div><strong>由你确认结果</strong>'
-                "<p>对照证据修正，预览修改差异，审核后导出结构化线索。</p></div></div></div>"
+                '<aside class="guide-card" aria-label="分析流程说明">'
+                '<h3>每一个判断，都留有依据。</h3><ol class="guide-steps" role="list">'
+                '<li class="guide-step"><span class="step-number" aria-hidden="true">1</span><div><strong>提取客户事实</strong>'
+                "<p>整理联系人、业务规模与需求，区分客户表述和销售介绍。</p></div></li>"
+                '<li class="guide-step"><span class="step-number" aria-hidden="true">2</span><div><strong>核实企业与意向</strong>'
+                "<p>结合企业来源和原文信号，展示判断依据与不确定项。</p></div></li>"
+                '<li class="guide-step"><span class="step-number" aria-hidden="true">3</span><div><strong>由你确认结果</strong>'
+                "<p>对照证据修正，预览修改差异，审核后导出结构化线索。</p></div></li></ol>"
                 '<div class="guide-note"><strong>未知，也是一种准确的结果。</strong><br>'
                 "无法确认的信息统一保留为 null，留待人工核实。</div></aside>",
                 unsafe_allow_html=True,
@@ -602,7 +597,7 @@ def workbench(settings, repo):
             st.info("上次结果已不在当前数据库中，请前往线索与审核查看现有记录。")
     else:
         st.markdown(
-            '<div class="empty-note"><span>✳</span> 分析结果将在这里展开，历史记录可在「线索与审核」中查看。</div>',
+            '<div class="empty-note">分析结果将在这里展开，历史记录可在「线索与审核」中查看。</div>',
             unsafe_allow_html=True,
         )
 
@@ -678,9 +673,7 @@ def batch_form(repo, runs):
 
 
 def history_page(repo):
-    page_heading(
-        "AI SDR / 线索管理", "线索与审核", "集中查看分析结果，对照证据确认信息，保留每一次修正。"
-    )
+    page_heading("线索与审核", "集中查看分析结果，对照证据确认信息，保留每一次修正。")
     runs = repo.list_runs()
     with st.container(key="history_stats"):
         cols = st.columns(3)
@@ -757,8 +750,11 @@ def main():
         return
     with st.sidebar:
         st.markdown(
-            '<div class="brand"><span class="brand-mark">✳</span><div><strong>AI SDR</strong>'
-            '<small>通话线索工作台</small></div></div><div class="nav-label">WORKSPACE / 工作区</div>',
+            '<div class="brand"><svg class="brand-mark" width="30" height="30" viewBox="0 0 30 30" '
+            'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '
+            'aria-hidden="true"><path d="M6 5h18a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H12l-6 4v-4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>'
+            '<path d="M10 11h10M10 16h6"/></svg><div><strong>AI SDR</strong>'
+            "<small>通话线索工作台</small></div></div>",
             unsafe_allow_html=True,
         )
         page = st.radio("工作区", ["分析工作台", "线索与审核"], label_visibility="collapsed")
