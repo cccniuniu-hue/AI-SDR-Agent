@@ -34,7 +34,7 @@ class Workflow:
         result = AnalysisResult(
             run_id=str(uuid.uuid4()),
             run_status="running",
-            versions={"model": self.settings.model, "prompt": "1.0", "scoring": "1.0"},
+            versions={"model": self.settings.model, "prompt": "1.0", "scoring": "1.0", "quality": "2.0"},
         )
         client = self.client or DeepSeekClient(self.settings)
         before = getattr(client, "request_count", 0)

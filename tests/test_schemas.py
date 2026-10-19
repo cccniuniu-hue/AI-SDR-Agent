@@ -64,3 +64,28 @@ def test_boolean_is_not_a_signal_score():
 
     with pytest.raises(ValidationError):
         Signal(value=True)
+
+
+@pytest.mark.parametrize("model_name", ["Lead", "QualityAssessment"])
+def test_confidence_defaults_to_numeric_zero(model_name):
+    from sdr_agent import schemas
+
+    model = getattr(schemas, model_name)
+    assert model().confidence_score == 0.0
+
+
+@pytest.mark.parametrize("model_name", ["Lead", "QualityAssessment"])
+@pytest.mark.parametrize("value", [None, -0.01, 1.01, float("nan"), float("inf"), "0.9", True])
+def test_confidence_requires_a_finite_number_in_unit_interval(model_name, value):
+    from sdr_agent import schemas
+
+    with pytest.raises(ValidationError):
+        getattr(schemas, model_name)(confidence_score=value)
+
+
+@pytest.mark.parametrize("value", [0.0, 0.53, 1.0])
+def test_confidence_accepts_numeric_boundary_and_middle_values(value):
+    from sdr_agent.schemas import Lead, QualityAssessment
+
+    assert Lead(confidence_score=value).confidence_score == value
+    assert QualityAssessment(confidence_score=value).confidence_score == value

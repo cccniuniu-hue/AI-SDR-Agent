@@ -47,7 +47,7 @@ class Lead(Model):
     shejishi: Count | None = None
     call_time: str | None = None
     next_action: str | None = None
-    confidence_score: Score | None = None
+    confidence_score: Score = 0.0
     need_human_review: bool = True
 
     @field_validator("*", mode="before")
@@ -155,7 +155,7 @@ class IntentDecision(Model):
 
 
 class QualityAssessment(Model):
-    confidence_score: Score | None = None
+    confidence_score: Score = 0.0
     need_human_review: bool = True
     review_reasons: list[str] = Field(default_factory=list)
     company_score: Score | None = None

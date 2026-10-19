@@ -5,10 +5,9 @@ def assess_quality(
     extraction: Extraction, company: CompanyResolution, intent: IntentDecision
 ) -> QualityAssessment:
     parts = [company.quality_score, intent.evidence_score, extraction.fact_evidence_ratio]
-    score = (
-        round(sum(v * w for v, w in zip(parts, (0.45, 0.40, 0.15))), 2)
-        if all(v is not None for v in parts)
-        else None
+    # Unknown evidence earns no contribution; keep the fixed weights and expose missing parts.
+    score = round(
+        sum((v if v is not None else 0.0) * w for v, w in zip(parts, (0.45, 0.40, 0.15))), 2
     )
     reasons = []
     if company.selected_name is None:
@@ -20,8 +19,10 @@ def assess_quality(
     if extraction.conflicted or extraction.role_uncertain:
         reasons.append("需要核对对话角色或冲突信息")
     reasons.extend(extraction.warnings)
-    if score is None or score < 0.8:
-        reasons.append("综合可靠程度未知或低于审核阈值 0.80")
+    if any(v is None for v in parts):
+        reasons.append("评分分项存在未知值，未知分项按 0 贡献计算，需人工核查")
+    if score < 0.8:
+        reasons.append("综合可靠程度低于审核阈值 0.80")
     return QualityAssessment(
         confidence_score=score,
         need_human_review=bool(reasons),

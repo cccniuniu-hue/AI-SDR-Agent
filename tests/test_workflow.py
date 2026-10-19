@@ -37,6 +37,8 @@ def test_successful_workflow_persists_fifteen_fields(tmp_path):
     assert result.run_status == "succeeded"
     assert result.lead.intent_level == "high"
     assert result.lead.phone is None
+    assert result.lead.confidence_score == 0.98
+    assert repo.export([result.run_id])[0]["confidence_score"] == 0.98
     assert len(repo.export([result.run_id])[0]) == 15
 
 
@@ -55,6 +57,12 @@ def test_company_unavailable_is_partial_not_fabricated(tmp_path):
     assert result.run_status == "partial"
     assert result.lead.company_name is None
     assert result.lead.need_human_review
+    assert result.lead.confidence_score == 0.53
+    stored = service.repository.get_run(result.run_id)
+    assert stored["analysis"]["quality"]["confidence_score"] == 0.53
+    assert stored["analysis"]["quality"]["company_score"] is None
+    assert stored["analysis"]["versions"]["quality"] == "2.0"
+    assert service.repository.export([result.run_id])[0]["confidence_score"] == 0.53
 
 
 def test_model_failure_is_not_a_successful_empty_lead(tmp_path):
