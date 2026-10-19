@@ -8,7 +8,7 @@
 
 仅接受文本，不提供音频上传或语音转写，不连接真实 CRM，也不自动联系客户。按本地单用户场景设计，尚未提供登录或多人权限管理。
 
-[架构与实现](docs/architecture.md) · [评测报告](docs/evaluation-report.md) · [评测数据说明](evaluation/README.md)
+[架构与实现](docs/architecture.md) · [评测报告](docs/evaluation-report.md) · [评测数据说明](evaluation/README.md) · [最新功能验收](docs/functional-acceptance.md)
 
 界面采用米白与墨绿配色，宽屏并排展示输入区与操作提示，窄屏自动排列；线索结果按客户信息、业务规模、需求和跟进行动分组。下图为新版界面。
 

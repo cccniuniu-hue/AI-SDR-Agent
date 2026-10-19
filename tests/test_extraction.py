@@ -53,6 +53,23 @@ def test_contact_name_can_use_sales_question_only_with_immediate_explicit_agreem
     )
 
 
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [("是的，你讲。", "张总"), ("你讲。", None), ("是的，你讲。不过我不是张总。", None)],
+)
+def test_contact_confirmation_accepts_pdf_reply_but_not_ambiguous_or_denied_identity(
+    reply, expected
+):
+    question = "您好，请问是张总吗？我是酷家乐的小王。"
+    data = AnalysisInput(transcript=f"销售：{question}\n客户：{reply}")
+    fact = Fact(
+        value="张总",
+        evidence=[ev(1, "请问是张总吗？", "sales"), ev(2, reply)],
+    )
+    result = validate_extraction(Extraction(facts={"contact_name": fact}), data)
+    assert result.facts["contact_name"].value == expected
+
+
 def test_approximate_counts_are_null_even_if_model_forgets_flag():
     data = AnalysisInput(transcript="客户：我们大概20家门店，设计师有十来个。")
     extraction = Extraction(
