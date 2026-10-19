@@ -213,3 +213,26 @@ def test_authentication_failure_explains_configuration_without_raw_error(tmp_pat
     at, _ = history_app(tmp_path, monkeypatch, failed=True, error_code="authentication_failed")
     assert not at.exception
     assert any("认证失败" in str(item.value) and "密钥配置" in str(item.value) for item in at.error)
+
+
+def test_result_cards_escape_customer_content_without_changing_export(tmp_path, monkeypatch):
+    value = '<img src=x onerror="alert(1)"> & 合成公司'
+    at, repo = history_app(
+        tmp_path, monkeypatch, lead=Lead(company_name=value, demand_summary=value)
+    )
+    assert not at.exception
+    cards = "\n".join(item.value for item in at.markdown if item.allow_html)
+    assert value not in cards
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; 合成公司" in cards
+    assert repo.export(["ui-test-run"])[0]["company_name"] == value
+
+
+def test_evidence_quotes_escape_customer_text(monkeypatch):
+    from sdr_agent.ui import quotes
+
+    rendered = []
+    monkeypatch.setattr("sdr_agent.ui.st.markdown", lambda body, **kwargs: rendered.append(body))
+    quotes([{"speaker": "customer", "turn_id": "<1>", "quote": "<script>alert(1)</script> & 原话"}])
+    assert "<script>" not in rendered[0]
+    assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; 原话" in rendered[0]
+    assert "&lt;1&gt;" in rendered[0]

@@ -4,6 +4,7 @@ import json
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from html import escape
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -72,6 +73,42 @@ def shown(value):
     return "未知 / null" if value is None else str(value)
 
 
+def page_heading(eyebrow, title, description):
+    st.markdown(
+        f'<div class="page-heading"><div class="eyebrow">{escape(eyebrow)}</div>'
+        f"<h1>{escape(title)}</h1><p>{escape(description)}</p></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_lead_summary(current):
+    groups = [
+        (
+            "企业与联系人",
+            ["company_name", "industry", "area", "contact_name", "contact_title", "phone"],
+        ),
+        ("业务与通话", ["mendian", "shejishi", "call_time", "need_human_review"]),
+    ]
+    cards = []
+    for title, fields in groups:
+        rows = []
+        for field in fields:
+            value = current[field]
+            if field == "need_human_review":
+                value = "是" if value else "否"
+            rows.append(f"<dt>{FIELDS[field]}</dt><dd>{escape(shown(value))}</dd>")
+        cards.append(
+            f'<section class="detail-card"><h4>{title}</h4><dl>{"".join(rows)}</dl></section>'
+        )
+    for field in ("demand_summary", "intent_reason", "next_action"):
+        accent = " action" if field == "next_action" else ""
+        cards.append(
+            f'<section class="detail-card full{accent}"><h4>{FIELDS[field]}</h4>'
+            f"<p>{escape(shown(current[field]))}</p></section>"
+        )
+    st.markdown('<div class="detail-grid">' + "".join(cards) + "</div>", unsafe_allow_html=True)
+
+
 def optional_count(value, label):
     value = value.strip()
     if not value:
@@ -101,8 +138,12 @@ def quotes(items):
         speaker = {"customer": "客户", "sales": "销售", "unknown": "角色不明"}.get(
             item.get("speaker"), "未知"
         )
-        st.caption(f"原文 · 第 {item.get('turn_id', '?')} 段 · {speaker}")
-        st.text(item.get("quote", ""))
+        label = f"原文 · 第 {item.get('turn_id', '?')} 段 · {speaker}"
+        st.markdown(
+            f'<blockquote class="evidence-quote"><small>{escape(label)}</small>'
+            f"<p>{escape(item.get('quote', ''))}</p></blockquote>",
+            unsafe_allow_html=True,
+        )
 
 
 def diff_rows(before, after):
@@ -206,25 +247,27 @@ def edit_form(repo, run):
     key = "single_preview_" + run["run_id"]
     with st.form("edit_" + run["run_id"] + "_" + str(run["version"])):
         values = {}
-        cols = st.columns(3)
-        short_fields = [
-            "company_name",
-            "industry",
-            "area",
-            "contact_name",
-            "contact_title",
-            "phone",
-            "mendian",
-            "shejishi",
-            "call_time",
-        ]
-        for index, field in enumerate(short_fields):
-            with cols[index % 3]:
-                values[field] = st.text_input(
-                    FIELDS[field],
-                    value="" if current[field] is None else str(current[field]),
-                    help="例：2026-10-19T14:30:00+08:00" if field == "call_time" else None,
-                )
+        for title, rows in [
+            (
+                "企业与联系人",
+                [
+                    ("company_name",),
+                    ("industry", "area"),
+                    ("contact_name", "contact_title"),
+                    ("phone",),
+                ],
+            ),
+            ("业务与通话", [("mendian", "shejishi"), ("call_time",)]),
+        ]:
+            st.markdown("##### " + title)
+            for row in rows:
+                for col, field in zip(st.columns(len(row)), row, strict=True):
+                    values[field] = col.text_input(
+                        FIELDS[field],
+                        value="" if current[field] is None else str(current[field]),
+                        help="例：2026-10-19T14:30:00+08:00" if field == "call_time" else None,
+                    )
+        st.markdown("##### 意向与跟进")
         values["intent_level"] = st.selectbox(
             "意向等级",
             list(INTENTS),
@@ -233,6 +276,7 @@ def edit_form(repo, run):
         )
         for field in ("intent_reason", "demand_summary", "next_action"):
             values[field] = st.text_area(FIELDS[field], value=current[field] or "", height=90)
+        st.markdown("##### 审核确认")
         reviewer = st.text_input("审核人")
         reason = st.text_area("修正 / 核实说明", height=90)
         approve = st.checkbox("同时标记为已审核")
@@ -390,10 +434,7 @@ def render_run(repo, run):
     st.subheader("线索详情", anchor=False)
     analysis, current = run["analysis"], run["current"]
     st.caption(
-        f"记录 {run['run_id']} · {STATUSES.get(run['run_status'], run['run_status'])} · {REVIEWS[run['review_status']]} · v{run['version']}"
-    )
-    st.caption(
-        f"创建于 {run['created_at']} · 耗时 {analysis.get('elapsed_ms', 0) / 1000:.1f} 秒 · 模型请求 {analysis.get('request_count', 0)} 次"
+        f"{STATUSES.get(run['run_status'], run['run_status'])} · {REVIEWS[run['review_status']]} · 版本 {run['version']}"
     )
     if current is None or run["run_status"] == "failed":
         st.error(
@@ -405,10 +446,17 @@ def render_run(repo, run):
         return
     original = run["original"] or {}
     score = original.get("confidence_score")
-    cols = st.columns(3)
-    cols[0].metric("企业主体", current["company_name"] or "待核实")
-    cols[1].metric("意向等级", INTENTS[current["intent_level"]])
-    cols[2].metric("机器质量分", f"{score:.0%}" if score is not None else "未知")
+    score_label = f"{score:.0%}" if score is not None else "未知"
+    st.markdown(
+        '<div class="lead-overview"><div class="lead-stat"><span>企业主体</span>'
+        f"<strong>{escape(current['company_name'] or '待核实企业')}</strong>"
+        f"<small>{escape(REVIEWS[run['review_status']])} · v{run['version']}</small></div>"
+        '<div class="lead-stat"><span>意向等级</span>'
+        f"<strong>{INTENTS[current['intent_level']]}</strong><small>当前线索意向</small></div>"
+        '<div class="lead-stat"><span>机器质量分</span>'
+        f"<strong>{score_label}</strong><small>原始评估 · 非购买概率</small></div></div>",
+        unsafe_allow_html=True,
+    )
     if run["review_status"] == "approved":
         st.success("人工审核已完成；原始机器评估和证据保留在记录中。")
     elif original.get("need_human_review", True):
@@ -428,11 +476,7 @@ def render_run(repo, run):
         ["结果与原文", "证据与来源", "人工修正", "审核轨迹"]
     )
     with summary:
-        st.dataframe(
-            [{"字段": label, "当前值": shown(current[field])} for field, label in FIELDS.items()],
-            hide_index=True,
-            width="stretch",
-        )
+        render_lead_summary(current)
         with st.expander("通话原文"):
             st.text(run["transcript"])
         st.download_button(
@@ -445,6 +489,10 @@ def render_run(repo, run):
         with st.expander("查看 15 字段 JSON"):
             st.json(current)
         with st.expander("查看原始机器结果与版本"):
+            st.caption(f"记录 {run['run_id']} · 创建于 {run['created_at']}")
+            st.caption(
+                f"耗时 {analysis.get('elapsed_ms', 0) / 1000:.1f} 秒 · 模型请求 {analysis.get('request_count', 0)} 次"
+            )
             st.json(
                 {
                     "original": original,
@@ -462,43 +510,69 @@ def render_run(repo, run):
 
 
 def workbench(settings, repo):
-    st.title("让每一次通话，成为有据可查的线索")
-    st.caption("AI SDR AGENT / 分析工作台")
-    st.write("粘贴销售通话文本，提取客户信息、核实企业主体并评估意向。无法确认的信息保留为空值。")
-    examples_path = Path(__file__).resolve().parents[2] / "examples" / "transcripts.jsonl"
-    if examples_path.exists():
-        examples = [
-            json.loads(line)
-            for line in examples_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        with st.expander("用合成通话试一试"):
-            choice = st.selectbox(
-                "选择示例", range(len(examples)), format_func=lambda index: examples[index]["name"]
+    page_heading(
+        "AI SDR / 分析工作台",
+        "把通话，变成下一步。",
+        "从客户原话中提取事实、核实企业、判断意向，让每条线索都有据可查。",
+    )
+    st.markdown(
+        '<div class="workflow-strip"><span><b>01</b> 输入通话</span><span class="arrow">→</span>'
+        '<span><b>02</b> 分析与核实</span><span class="arrow">→</span><span><b>03</b> 审核并导出</span></div>',
+        unsafe_allow_html=True,
+    )
+    with st.container(key="workbench_layout"):
+        input_col, guide_col = st.columns([1.9, 1], gap="large")
+        with input_col, st.container(key="input_card", border=True):
+            st.subheader("通话文本", anchor=False)
+            st.caption("保留说话人标记，帮助区分客户事实与销售介绍。")
+            examples_path = Path(__file__).resolve().parents[2] / "examples" / "transcripts.jsonl"
+            if examples_path.exists():
+                examples = [
+                    json.loads(line)
+                    for line in examples_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                with st.expander("用合成通话试一试"):
+                    choice = st.selectbox(
+                        "选择示例",
+                        range(len(examples)),
+                        format_func=lambda index: examples[index]["name"],
+                    )
+                    st.caption("以下示例均为合成文本，企业、人物和业务场景不代表真实记录。")
+                    if st.button("载入合成示例"):
+                        st.session_state["text"] = examples[choice]["transcript"]
+            with st.form("analyze", border=False):
+                text = st.text_area(
+                    "粘贴通话文本",
+                    key="text",
+                    height=260,
+                    max_chars=20000,
+                    placeholder="销售：您好，想了解一下您目前的业务需求。\n\n客户：我们目前有……",
+                    help="建议保留客户与销售的说话人标记，最多 20,000 字。",
+                )
+                call_time = st.text_input(
+                    "通话时间（可选）",
+                    placeholder="2026-10-19T14:30:00+08:00",
+                    help="使用带时区的 ISO 8601 时间；未知时留空。",
+                )
+                submitted = st.form_submit_button(
+                    "开始分析", type="primary", disabled=not settings.api_key, width="stretch"
+                )
+            st.caption("提交后由 DeepSeek 分析文本，结果和审核记录保存在本机。")
+        with guide_col:
+            st.markdown(
+                '<aside class="guide-card"><div class="eyebrow">从原话到线索</div>'
+                '<h3>每一个判断，<br>都留有依据。</h3><div class="guide-steps">'
+                '<div class="guide-step"><span class="step-number">01</span><div><strong>提取客户事实</strong>'
+                "<p>整理联系人、业务规模与需求，区分客户表述和销售介绍。</p></div></div>"
+                '<div class="guide-step"><span class="step-number">02</span><div><strong>核实企业与意向</strong>'
+                "<p>结合企业来源和原文信号，展示判断依据与不确定项。</p></div></div>"
+                '<div class="guide-step"><span class="step-number">03</span><div><strong>由你确认结果</strong>'
+                "<p>对照证据修正，预览修改差异，审核后导出结构化线索。</p></div></div></div>"
+                '<div class="guide-note"><strong>未知，也是一种准确的结果。</strong><br>'
+                "无法确认的信息统一保留为 null，留待人工核实。</div></aside>",
+                unsafe_allow_html=True,
             )
-            st.caption("以下示例均为合成文本，企业、人物和业务场景不代表真实记录。")
-            if st.button("载入合成示例"):
-                st.session_state["text"] = examples[choice]["transcript"]
-    with st.container(border=True):
-        st.subheader("通话文本", anchor=False)
-        with st.form("analyze"):
-            text = st.text_area(
-                "粘贴通话文本",
-                key="text",
-                height=285,
-                max_chars=20000,
-                placeholder="销售：您好……\n客户：我们目前有……",
-                help="建议保留客户与销售的说话人标记，最多 20,000 字。",
-            )
-            call_time = st.text_input(
-                "通话时间（可选）",
-                placeholder="2026-10-19T14:30:00+08:00",
-                help="使用带时区的 ISO 8601 时间；未知时留空。",
-            )
-            submitted = st.form_submit_button(
-                "开始分析", type="primary", disabled=not settings.api_key, width="stretch"
-            )
-        st.caption("点击后会将文本发送给已配置的 DeepSeek 服务。结果和审核记录保存在本机。")
     if submitted:
         if not text.strip():
             st.error("请先填写通话文本。")
@@ -527,20 +601,10 @@ def workbench(settings, repo):
         except KeyError:
             st.info("上次结果已不在当前数据库中，请前往线索与审核查看现有记录。")
     else:
-        cols = st.columns(3)
-        for col, title, body in zip(
-            cols,
-            ["01 · 提取事实", "02 · 核实与评估", "03 · 人工确认"],
-            [
-                "联系人、业务规模与需求摘要",
-                "企业来源、意向信号与不确定项",
-                "预览差异、记录审核并导出 JSON",
-            ],
-            strict=True,
-        ):
-            with col.container(border=True):
-                st.write(title)
-                st.caption(body)
+        st.markdown(
+            '<div class="empty-note"><span>✳</span> 分析结果将在这里展开，历史记录可在「线索与审核」中查看。</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def run_label(run):
@@ -614,23 +678,28 @@ def batch_form(repo, runs):
 
 
 def history_page(repo):
-    st.title("线索与审核")
-    st.caption("从证据到确认，每一步都有记录。")
-    runs = repo.list_runs()
-    cols = st.columns(3)
-    cols[0].metric("全部分析", len(runs))
-    cols[1].metric(
-        "未人工审核",
-        sum(run["review_status"] != "approved" and run["current"] is not None for run in runs),
+    page_heading(
+        "AI SDR / 线索管理", "线索与审核", "集中查看分析结果，对照证据确认信息，保留每一次修正。"
     )
-    cols[2].metric("已审核", sum(run["review_status"] == "approved" for run in runs))
+    runs = repo.list_runs()
+    with st.container(key="history_stats"):
+        cols = st.columns(3)
+        cols[0].metric("全部分析", len(runs))
+        cols[1].metric(
+            "未人工审核",
+            sum(run["review_status"] != "approved" and run["current"] is not None for run in runs),
+        )
+        cols[2].metric("已审核", sum(run["review_status"] == "approved" for run in runs))
     if not runs:
         st.info("还没有分析记录。前往分析工作台，粘贴一段通话文本即可开始。")
         return
-    filters = st.columns(3)
-    intent_filter = filters[0].selectbox("筛选意向", ["全部", "未知", "高意向", "中意向", "低意向"])
-    review_filter = filters[1].selectbox("筛选审核状态", ["全部", *REVIEWS.values()])
-    date_filter = filters[2].selectbox("创建时间", ["全部时间", "最近 7 天", "最近 30 天"])
+    with st.container(key="history_filters"):
+        filters = st.columns(3)
+        intent_filter = filters[0].selectbox(
+            "筛选意向", ["全部", "未知", "高意向", "中意向", "低意向"]
+        )
+        review_filter = filters[1].selectbox("筛选审核状态", ["全部", *REVIEWS.values()])
+        date_filter = filters[2].selectbox("创建时间", ["全部时间", "最近 7 天", "最近 30 天"])
     cutoff = datetime.now(timezone.utc) - timedelta(days=7 if date_filter == "最近 7 天" else 30)
     filtered = [
         run
@@ -677,14 +746,7 @@ def history_page(repo):
 def main():
     st.set_page_config(page_title="AI SDR Agent · 通话线索工作台", page_icon="✳", layout="wide")
     st.markdown(
-        """<style>
-    .block-container {max-width: 1200px; padding-top: 2.5rem; padding-bottom: 3rem;}
-    h1 {font-size: 2rem !important; letter-spacing: -.035em;}
-    h2, h3 {letter-spacing: -.02em;}
-    [data-testid="stMetric"] {background: white; border: 1px solid #e0e8e3; padding: 1rem 1.2rem; border-radius: 12px;}
-    [data-testid="stMetricValue"] {font-size: 1.65rem;}
-    [data-testid="stSidebar"] {border-right: 1px solid #e0e8e3;}
-    </style>""",
+        "<style>" + Path(__file__).with_name("styles.css").read_text(encoding="utf-8") + "</style>",
         unsafe_allow_html=True,
     )
     settings = Settings.from_env()
@@ -694,15 +756,23 @@ def main():
         st.error("无法打开本地数据文件，请检查 DATABASE_PATH 和目录写入权限。")
         return
     with st.sidebar:
-        st.title("AI SDR")
-        st.caption("通话线索工作台")
-        st.divider()
+        st.markdown(
+            '<div class="brand"><span class="brand-mark">✳</span><div><strong>AI SDR</strong>'
+            '<small>通话线索工作台</small></div></div><div class="nav-label">WORKSPACE / 工作区</div>',
+            unsafe_allow_html=True,
+        )
         page = st.radio("工作区", ["分析工作台", "线索与审核"], label_visibility="collapsed")
         st.divider()
-        st.caption("文本分析 · 企业核实 · 人工审核")
-        st.caption("模型：" + settings.model)
-        st.caption("企业查询：" + ("已开启" if settings.search_enabled else "已关闭"))
-        st.caption("数据存储：本机 SQLite")
+        st.markdown(
+            '<div class="sidebar-status"><strong><span class="status-dot"></span>'
+            + ("模型密钥已配置" if settings.api_key else "等待配置模型")
+            + "</strong><br>"
+            + escape(settings.model)
+            + "<br>企业查询 · "
+            + ("已开启" if settings.search_enabled else "已关闭")
+            + '</div><div class="sidebar-note">文本分析 · 企业核实 · 人工审核<br>分析与审核记录保存在本机</div>',
+            unsafe_allow_html=True,
+        )
     if not settings.api_key:
         st.warning(
             "尚未配置 DEEPSEEK_API_KEY。请在本地 .env 中填写后重新启动；历史记录和人工审核仍可使用。"

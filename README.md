@@ -10,6 +10,10 @@
 
 [操作演示](docs/assets/demo.mp4) · [设计与架构](docs/superpowers/specs/2026-10-19-ai-sdr-agent-design.md) · [评测报告](docs/evaluation-report.md) · [评测数据说明](evaluation/README.md)
 
+界面采用米白与墨绿配色，宽屏并排展示输入区与操作提示，窄屏自动排列；线索结果按客户信息、业务规模、需求和跟进行动分组。下图为新版界面，操作演示仍为此前录制版本。
+
+![新版分析工作台](docs/assets/workbench-v2-wide.jpg)
+
 ## 快速启动：Windows / Python 3.11
 
 以下为 Windows PowerShell 操作步骤，Windows 11 可按相同路径配置 Python 3.11。**实际验证宿主为 Windows 10 家庭中文版 22H2（build 19045）、CPython 3.11.7 x64、Streamlit 1.66.0**；未单独验证 Windows 11。使用 Python 3.11 复现；`requirements.txt` 固定全部运行依赖及构建工具，`requirements-dev.txt` 固定测试与静态检查工具。macOS/Linux 也尚未实测。
@@ -149,7 +153,7 @@ live 命令会产生模型与查询请求。每次评测使用新的输出名；
 
 - 44 个运行 / 构建包与锁文件版本一致；`pip check` 无依赖冲突。
 - 全部 `sdr_agent` 模块可导入；AppTest 无密钥工作台及历史页启动通过，分析按钮禁用，模型请求为 0。
-- 安装开发锁后，119 项测试通过，Ruff 检查通过。
+- 安装开发锁后，121 项测试通过，Ruff 检查通过（含新增卡片与证据 HTML 转义检查）。
 - fixture 开发集与直接 Prompt 替身共写入 24 / 24 条记录；该结果只验证评测管道，不代表模型效果。
 
 该临时环境和验证数据库不提交仓库；它不复用开发 `.venv` 的 site-packages，也未安装视频录制工具。
