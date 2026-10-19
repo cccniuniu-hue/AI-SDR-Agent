@@ -74,7 +74,7 @@ def shown(value):
 
 
 def timestamp_label(value):
-    return datetime.fromisoformat(value).isoformat(timespec="seconds")
+    return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def page_heading(title, description):
