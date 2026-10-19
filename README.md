@@ -8,9 +8,9 @@
 
 仅接受文本，不提供音频上传或语音转写，不连接真实 CRM，也不自动联系客户。按本地单用户场景设计，尚未提供登录或多人权限管理。
 
-[操作演示](docs/assets/demo.mp4) · [设计与架构](docs/superpowers/specs/2026-10-19-ai-sdr-agent-design.md) · [评测报告](docs/evaluation-report.md) · [评测数据说明](evaluation/README.md)
+[架构与实现](docs/architecture.md) · [评测报告](docs/evaluation-report.md) · [评测数据说明](evaluation/README.md)
 
-界面采用米白与墨绿配色，宽屏并排展示输入区与操作提示，窄屏自动排列；线索结果按客户信息、业务规模、需求和跟进行动分组。下图为新版界面，操作演示仍为此前录制版本。
+界面采用米白与墨绿配色，宽屏并排展示输入区与操作提示，窄屏自动排列；线索结果按客户信息、业务规模、需求和跟进行动分组。下图为新版界面。
 
 ![新版分析工作台](docs/assets/workbench-v2-wide.jpg)
 
@@ -21,7 +21,7 @@
 在 PowerShell 中进入项目根目录。先确认 `python --version` 为 3.11.x；本机验证使用 `python` 命令，无需依赖 Windows `py` 启动器或激活脚本。
 
 ```powershell
-git clone --branch feat/sdr-local-app https://github.com/cccniuniu-hue/AI-SDR-Agent.git
+git clone --branch main https://github.com/cccniuniu-hue/AI-SDR-Agent.git
 cd AI-SDR-Agent
 python --version
 python -m venv .venv
@@ -117,7 +117,11 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item -LiteralPath .env.example -D
 | [`repository.py`](src/sdr_agent/repository.py)、[`review.py`](src/sdr_agent/review.py) | SQLite、版本检查、事务审核、历史与导出 |
 | [`evaluation.py`](src/sdr_agent/evaluation.py) | 开发 / 保留集评测、直接 Prompt 基线、逐样本记录与恢复 |
 
-企业证据和意向规则的详细约束见[设计文档](docs/superpowers/specs/2026-10-19-ai-sdr-agent-design.md)。
+企业证据、意向规则和审核机制见[架构与实现](docs/architecture.md)。
+
+## 开发与提交
+
+本项目默认直接在 `main` 分支提交并推送，不要求创建 PR/MR。推送前检查远端更新并完成相关验证，保留已有改动。实施计划、设计草案和准备记录仅保留在本地，不提交到 GitHub；仓库保留运行说明、实现说明与评测材料。
 
 ## 测试与评测
 

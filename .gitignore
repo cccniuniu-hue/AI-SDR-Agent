@@ -14,3 +14,8 @@ dist/
 *.mp3
 *.zip
 local-data/
+
+# Preparation notes stay local; only delivery documentation is published.
+/docs/superpowers/
+/docs/requirements-audit.md
+/docs/demo-script.md
