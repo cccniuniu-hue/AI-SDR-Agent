@@ -125,6 +125,8 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item -LiteralPath .env.example -D
 
 ## 测试与评测
 
+手工验收请使用[完整测试手册](docs/manual-testing/README.md)：包含89条操作用例、22段可复制通话样例、Excel执行记录表，以及隔离测试库和本地异常模拟方法。所有用例初始标为未执行，适合逐项验证后记录结果。
+
 安装开发依赖后执行以下离线检查；测试使用临时数据库与服务替身，不需要真实密钥：
 
 ```powershell
