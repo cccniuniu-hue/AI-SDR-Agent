@@ -1,5 +1,7 @@
+from datetime import datetime
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from sdr_agent.repository import Repository
@@ -45,6 +47,74 @@ def test_empty_input_is_blocked_without_request(tmp_path, monkeypatch):
     next(b for b in at.button if b.label == "开始分析").click().run()
     assert not at.exception
     assert any("通话文本" in str(item.value) for item in at.error)
+
+
+@pytest.mark.parametrize("selected", [None, datetime(2026, 10, 18, 14, 37)])
+def test_analysis_call_time_picker_submits_beijing_time_or_null(tmp_path, monkeypatch, selected):
+    from sdr_agent.workflow import Workflow
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key-not-real")
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "ui.sqlite3"))
+    requests = []
+
+    def analyze(self, request):
+        requests.append(request)
+        result = AnalysisResult(
+            run_id="time-picker-test",
+            run_status="succeeded",
+            lead=Lead(call_time=request.call_time),
+        )
+        self.repository.save_run(request, result)
+        return result
+
+    monkeypatch.setattr(Workflow, "analyze", analyze)
+    at = AppTest.from_file(str(Path(__file__).parents[1] / "app.py"), default_timeout=15).run()
+    picker = by_label(at.datetime_input, "通话时间（可选）")
+    assert picker.value is None
+    picker.set_value(selected)
+    by_label(at.text_area, "粘贴通话文本").set_value("客户：这是一条合成测试通话。")
+    by_label(at.button, "开始分析").click().run()
+    assert not at.exception
+    expected = "2026-10-18T14:37:00+08:00" if selected else None
+    assert requests[0].call_time == expected
+    repo = Repository(tmp_path / "ui.sqlite3")
+    assert repo.export(["time-picker-test"])[0]["call_time"] == expected
+
+
+@pytest.mark.parametrize(
+    ("original", "selected", "expected"),
+    [
+        (None, datetime(2026, 10, 18, 14, 37), "2026-10-18T14:37:00+08:00"),
+        ("2026-10-17T06:30:45.123456+00:00", None, None),
+        (
+            "2026-10-17T06:30:45.123456+00:00",
+            datetime(2026, 10, 18, 14, 37),
+            "2026-10-18T14:37:00+08:00",
+        ),
+        (
+            "2026-10-17T06:30:45.123456+00:00",
+            datetime(2026, 10, 17, 14, 30),
+            "2026-10-17T06:30:45.123456+00:00",
+        ),
+    ],
+)
+def test_review_call_time_picker_requires_confirmation_and_preserves_unchanged_precision(
+    tmp_path, monkeypatch, original, selected, expected
+):
+    at, repo = history_app(tmp_path, monkeypatch, lead=Lead(call_time=original))
+    picker = by_label(at.datetime_input, "通话时间")
+    assert picker.value == (datetime(2026, 10, 17, 14, 30) if original else None)
+    picker.set_value(selected)
+    by_label(at.text_input, "审核人").set_value("测试审核员")
+    by_label(at.text_area, "修正 / 核实说明").set_value("核对通话时间")
+    by_label(at.button, "预览本条修改").click().run()
+    assert not at.exception
+    assert repo.export(["ui-test-run"])[0]["call_time"] == original
+    by_label(at.button, "确认保存本条修改").click().run()
+    assert not at.exception
+    assert repo.export(["ui-test-run"])[0]["call_time"] == expected
+    picker = by_label(at.datetime_input, "通话时间")
+    assert picker.value == selected
 
 
 def test_review_requires_preview_then_confirmation(tmp_path, monkeypatch):

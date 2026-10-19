@@ -117,6 +117,36 @@ def optional_count(value, label):
     return int(value)
 
 
+def call_time_picker(label, *, key, value=None):
+    beijing = timezone(timedelta(hours=8))
+    initial = (
+        datetime.fromisoformat(value)
+        .astimezone(beijing)
+        .replace(tzinfo=None, second=0, microsecond=0)
+        if value is not None
+        else None
+    )
+    # A nullable default lets an existing timestamp be cleared back to null.
+    if key not in st.session_state:
+        st.session_state[key] = initial
+    selected = st.datetime_input(
+        label,
+        value=None,
+        min_value=datetime.min,
+        max_value=datetime.max,
+        key=key,
+        format="YYYY-MM-DD",
+        step=60,
+        help="点击选择日期和时间，按北京时间（UTC+8）保存；点击 × 清空，未知时留空。",
+    )
+    if selected is None:
+        return None
+    # Reviewing another field must not discard the original seconds or offset.
+    if value is not None and selected == initial:
+        return value
+    return selected.replace(tzinfo=beijing).isoformat()
+
+
 def safe_source(url):
     try:
         parsed = urlsplit(url or "")
@@ -261,11 +291,18 @@ def edit_form(repo, run):
             st.markdown("##### " + title)
             for row in rows:
                 for col, field in zip(st.columns(len(row)), row, strict=True):
-                    values[field] = col.text_input(
-                        FIELDS[field],
-                        value="" if current[field] is None else str(current[field]),
-                        help="例：2026-10-19T14:30:00+08:00" if field == "call_time" else None,
-                    )
+                    if field == "call_time":
+                        with col:
+                            values[field] = call_time_picker(
+                                FIELDS[field],
+                                value=current[field],
+                                key=f"call_time_{run['run_id']}_{run['version']}",
+                            )
+                    else:
+                        values[field] = col.text_input(
+                            FIELDS[field],
+                            value="" if current[field] is None else str(current[field]),
+                        )
         st.markdown("##### 意向与跟进")
         values["intent_level"] = st.selectbox(
             "意向等级",
@@ -544,11 +581,8 @@ def workbench(settings, repo):
                     help="建议保留客户与销售的说话人标记，最多 20,000 字。",
                 )
                 time_col, action_col = st.columns([1.6, 1], vertical_alignment="bottom")
-                call_time = time_col.text_input(
-                    "通话时间（可选）",
-                    placeholder="2026-10-19T14:30:00+08:00",
-                    help="使用带时区的 ISO 8601 时间；未知时留空。",
-                )
+                with time_col:
+                    call_time = call_time_picker("通话时间（可选）", key="analysis_call_time")
                 with action_col:
                     submitted = st.form_submit_button(
                         "开始分析", type="primary", disabled=not settings.api_key, width="stretch"
@@ -573,9 +607,9 @@ def workbench(settings, repo):
             st.error("请先填写通话文本。")
         else:
             try:
-                request = AnalysisInput(transcript=text, call_time=call_time.strip() or None)
+                request = AnalysisInput(transcript=text, call_time=call_time)
             except ValidationError:
-                st.error("请检查通话文本长度及时间格式；时间必须包含时区，例如 +08:00。")
+                st.error("请检查通话文本长度及所选通话时间。")
             else:
                 with st.status("正在分析通话…", expanded=True) as status:
                     try:
