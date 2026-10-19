@@ -49,7 +49,10 @@ def test_empty_input_is_blocked_without_request(tmp_path, monkeypatch):
     assert any("通话文本" in str(item.value) for item in at.error)
 
 
-@pytest.mark.parametrize("selected", [None, datetime(2026, 10, 18, 14, 37)])
+@pytest.mark.parametrize(
+    "selected",
+    [None, datetime(2026, 10, 18, 14, 37), datetime(2024, 2, 29, 23, 59), datetime(2026, 10, 18)],
+)
 def test_analysis_call_time_picker_submits_beijing_time_or_null(tmp_path, monkeypatch, selected):
     from sdr_agent.workflow import Workflow
 
@@ -69,13 +72,20 @@ def test_analysis_call_time_picker_submits_beijing_time_or_null(tmp_path, monkey
 
     monkeypatch.setattr(Workflow, "analyze", analyze)
     at = AppTest.from_file(str(Path(__file__).parents[1] / "app.py"), default_timeout=15).run()
-    picker = by_label(at.datetime_input, "通话时间（可选）")
+    picker = at.date_input(key="analysis_call_time_date")
     assert picker.value is None
-    picker.set_value(selected)
+    picker.set_value(selected.date() if selected else None)
+    if selected:
+        at.selectbox(key="analysis_call_time_hour").set_value(selected.hour)
+        at.selectbox(key="analysis_call_time_minute").set_value(selected.minute)
+    else:
+        # A missing date still means unknown even if a user has touched the clock fields.
+        at.selectbox(key="analysis_call_time_hour").set_value(23)
+        at.selectbox(key="analysis_call_time_minute").set_value(59)
     by_label(at.text_area, "粘贴通话文本").set_value("客户：这是一条合成测试通话。")
     by_label(at.button, "开始分析").click().run()
     assert not at.exception
-    expected = "2026-10-18T14:37:00+08:00" if selected else None
+    expected = selected.isoformat() + "+08:00" if selected else None
     assert requests[0].call_time == expected
     repo = Repository(tmp_path / "ui.sqlite3")
     assert repo.export(["time-picker-test"])[0]["call_time"] == expected
@@ -102,9 +112,15 @@ def test_review_call_time_picker_requires_confirmation_and_preserves_unchanged_p
     tmp_path, monkeypatch, original, selected, expected
 ):
     at, repo = history_app(tmp_path, monkeypatch, lead=Lead(call_time=original))
-    picker = by_label(at.datetime_input, "通话时间")
-    assert picker.value == (datetime(2026, 10, 17, 14, 30) if original else None)
-    picker.set_value(selected)
+    key = "call_time_ui-test-run_1"
+    picker = at.date_input(key=key + "_date")
+    assert picker.value == (datetime(2026, 10, 17).date() if original else None)
+    assert at.selectbox(key=key + "_hour").value == (14 if original else 0)
+    assert at.selectbox(key=key + "_minute").value == (30 if original else 0)
+    picker.set_value(selected.date() if selected else None)
+    if selected:
+        at.selectbox(key=key + "_hour").set_value(selected.hour)
+        at.selectbox(key=key + "_minute").set_value(selected.minute)
     by_label(at.text_input, "审核人").set_value("测试审核员")
     by_label(at.text_area, "修正 / 核实说明").set_value("核对通话时间")
     by_label(at.button, "预览本条修改").click().run()
@@ -113,8 +129,11 @@ def test_review_call_time_picker_requires_confirmation_and_preserves_unchanged_p
     by_label(at.button, "确认保存本条修改").click().run()
     assert not at.exception
     assert repo.export(["ui-test-run"])[0]["call_time"] == expected
-    picker = by_label(at.datetime_input, "通话时间")
-    assert picker.value == selected
+    key = "call_time_ui-test-run_2"
+    assert at.date_input(key=key + "_date").value == (selected.date() if selected else None)
+    if selected:
+        assert at.selectbox(key=key + "_hour").value == selected.hour
+        assert at.selectbox(key=key + "_minute").value == selected.minute
 
 
 def test_review_requires_preview_then_confirmation(tmp_path, monkeypatch):

@@ -127,20 +127,38 @@ def call_time_picker(label, *, key, value=None):
         else None
     )
     # A nullable default lets an existing timestamp be cleared back to null.
-    if key not in st.session_state:
-        st.session_state[key] = initial
-    selected = st.datetime_input(
-        label,
-        value=None,
-        min_value=datetime.min,
-        max_value=datetime.max,
-        key=key,
-        format="YYYY-MM-DD",
-        step=60,
-        help="点击选择日期和时间，按北京时间（UTC+8）保存；点击 × 清空，未知时留空。",
-    )
-    if selected is None:
+    date_key = key + "_date"
+    if date_key not in st.session_state:
+        st.session_state[date_key] = initial.date() if initial else None
+    with st.container(key=key + "_picker"):
+        date_col, hour_col, minute_col = st.columns([2.2, 1, 1])
+        date = date_col.date_input(
+            label,
+            value=None,
+            min_value=datetime.min.date(),
+            max_value=datetime.max.date(),
+            key=date_key,
+            format="YYYY-MM-DD",
+            help="点击日历选择日期，点击 × 清空。日期为空时，通话时间保存为 null。",
+        )
+        hour = hour_col.selectbox(
+            "小时",
+            range(24),
+            index=initial.hour if initial else 0,
+            format_func=lambda value: f"{value:02d}",
+            key=key + "_hour",
+        )
+        minute = minute_col.selectbox(
+            "分钟",
+            range(60),
+            index=initial.minute if initial else 0,
+            format_func=lambda value: f"{value:02d}",
+            key=key + "_minute",
+        )
+        st.caption("北京时间（UTC+8）。请核对小时和分钟；日期留空或清空即为未知。")
+    if date is None:
         return None
+    selected = datetime(date.year, date.month, date.day, hour, minute)
     # Reviewing another field must not discard the original seconds or offset.
     if value is not None and selected == initial:
         return value
@@ -294,7 +312,7 @@ def edit_form(repo, run):
                     if field == "call_time":
                         with col:
                             values[field] = call_time_picker(
-                                FIELDS[field],
+                                "通话日期",
                                 value=current[field],
                                 key=f"call_time_{run['run_id']}_{run['version']}",
                             )
@@ -580,9 +598,8 @@ def workbench(settings, repo):
                     placeholder="销售：您好，想了解一下您目前的业务需求。\n\n客户：我们目前有……",
                     help="建议保留客户与销售的说话人标记，最多 20,000 字。",
                 )
-                time_col, action_col = st.columns([1.6, 1], vertical_alignment="bottom")
-                with time_col:
-                    call_time = call_time_picker("通话时间（可选）", key="analysis_call_time")
+                call_time = call_time_picker("通话日期（可选）", key="analysis_call_time")
+                _, action_col = st.columns([1.6, 1])
                 with action_col:
                     submitted = st.form_submit_button(
                         "开始分析", type="primary", disabled=not settings.api_key, width="stretch"

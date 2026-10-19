@@ -64,6 +64,8 @@ h5 { font-size: 1rem !important; padding-top: 1rem !important; }
 [data-testid="stTextArea"] > div:has(> textarea):focus-within { outline: 2px solid var(--sdr-green); outline-offset: 2px; border-color: var(--sdr-green); }
 [data-testid="stSelectbox"] [role="group"]:has(> [role="combobox"]) { border: 1px solid var(--sdr-control); border-radius: 8px; background: var(--sdr-paper); }
 [data-testid="stSelectbox"] [role="group"]:has(> [role="combobox"]):focus-within { outline: 2px solid var(--sdr-green); outline-offset: 2px; border-radius: 8px; }
+/* Streamlit's calendar header places month before year; match the YYYY-MM-DD field. */
+[data-testid="stDateInputCalendar"] header > div:has(button[aria-haspopup="listbox"]) { flex-direction: row-reverse; }
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] {
   border-radius: 8px; min-height: 44px; background: var(--sdr-green); border-color: var(--sdr-green);
   color: var(--sdr-paper); font-weight: 600; transition: background-color 160ms ease-out;
