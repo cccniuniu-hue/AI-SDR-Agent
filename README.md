@@ -6,7 +6,12 @@
 
 ## 当前状态
 
-项目初始化阶段。本次提交用于确认 GitHub 仓库与 SSH 推送流程，尚未实现应用功能。
+项目初始化阶段，GitHub 仓库与 SSH 推送流程已验证，尚未实现应用功能。
+
+开发方案已按 DeepSeek 服务制定，应用仍处于开发前阶段：
+
+- [开发设计：范围、架构、识别规则与验收](docs/superpowers/specs/2026-10-19-ai-sdr-agent-design.md)
+- [开发实施计划：任务顺序、文件职责与验证步骤](docs/superpowers/plans/2026-10-19-ai-sdr-agent.md)
 
 ## 已确认的项目范围
 
