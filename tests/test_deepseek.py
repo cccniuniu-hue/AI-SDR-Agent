@@ -251,6 +251,92 @@ def test_timeout_retry_exhaustion_is_safe(monkeypatch):
     assert "secret-test-key" not in str(caught.value)
 
 
+@pytest.mark.parametrize("tool", ["search", "fetch"])
+def test_company_tools_fail_fast_without_retrying(monkeypatch, tool):
+    monkeypatch.setattr("sdr_agent.deepseek.time.sleep", lambda _: None)
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(503)
+
+    with client_for(handler) as client:
+        with pytest.raises(DeepSeekError):
+            getattr(client, tool)(
+                "https://example.com" if tool == "fetch" else "测试公司", time.monotonic() + 30
+            )
+        assert client.request_count == 1
+    assert seen[0].extensions["timeout"]["read"] <= 8
+
+
+def test_continuous_slow_response_cannot_bypass_wall_clock_deadline(tmp_path, monkeypatch):
+    from sdr_agent.repository import Repository
+    from sdr_agent.schemas import Fact, SearchResult, Signal
+    from sdr_agent.workflow import Workflow
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = b" " * 25 + b'{"results": []}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for _ in range(25):
+                    self.wfile.write(b" ")
+                    self.wfile.flush()
+                    time.sleep(0.04)
+                self.wfile.write(b'{"results": []}')
+            except OSError:
+                pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with DeepSeekClient(
+            Settings(api_key="test-key-not-real", base_url=f"http://127.0.0.1:{server.server_port}")
+        ) as client:
+            start = time.monotonic()
+            with pytest.raises(DeepSeekError) as caught:
+                client.search("测试公司", start + 0.15)
+            elapsed = time.monotonic() - start
+            # HTTPX's inactivity timer may expire just before the cancellation deadline.
+            assert caught.value.code in {"deadline_exceeded", "provider_unavailable"}
+            assert elapsed < 0.6
+            assert client.request_count == 1
+
+            extraction = Extraction(
+                company_mention="测试主体有限公司",
+                facts={"area": Fact(value="杭州")},
+                signals={"pain": Signal(value=1), "engagement": Signal(value=1)},
+            )
+            source = SearchResult(
+                url="https://example.com/company", content="测试主体有限公司位于杭州。"
+            )
+            monkeypatch.setattr(client, "extract", lambda *_: extraction)
+            monkeypatch.setattr(client, "search", lambda *_: [source])
+            repo = Repository(tmp_path / "slow.sqlite3")
+            start = time.monotonic()
+            result = Workflow(Settings(company_timeout=0.15), repo, client=client).analyze(
+                AnalysisInput(transcript="客户：我们在杭州，出图慢，请安排演示。")
+            )
+            assert time.monotonic() - start < 0.6
+            assert result.run_status == "partial"
+            assert result.lead.area == "杭州"
+            assert result.lead.intent_level == "medium"
+            assert result.lead.company_name is None
+            assert result.company.evidence == [source]
+            assert len(repo.export([result.run_id])[0]) == 15
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_company_candidate_request_excludes_customer_contact_details():
     from sdr_agent.schemas import Fact, SearchResult
 

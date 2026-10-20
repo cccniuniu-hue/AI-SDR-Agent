@@ -1,3 +1,7 @@
+import time
+
+import pytest
+
 from sdr_agent.config import Settings
 from sdr_agent.repository import Repository
 from sdr_agent.schemas import AnalysisInput, CompanyResolution, Evidence, Extraction, Fact, Signal
@@ -20,6 +24,35 @@ class Client:
                 for k in ["pain", "timeline", "budget", "engagement"]
             },
         )
+
+
+@pytest.mark.parametrize(
+    ("analysis_timeout", "company_timeout"),
+    [(180, 2), (0.5, 30)],
+)
+def test_company_phase_has_its_own_bounded_budget(tmp_path, analysis_timeout, company_timeout):
+    from sdr_agent.workflow import Workflow
+
+    seen = []
+    messages = []
+
+    def resolver(client, extraction, deadline, **kwargs):
+        seen.append(deadline - time.monotonic())
+        assert callable(kwargs["progress"])
+        return CompanyResolution(status="unavailable", reason="企业核实超时")
+
+    result = Workflow(
+        Settings(analysis_timeout=analysis_timeout, company_timeout=company_timeout),
+        Repository(tmp_path / "db.sqlite3"),
+        client=Client(),
+        company_resolver=resolver,
+        progress=messages.append,
+    ).analyze(AnalysisInput(transcript="客户：希望试用。"))
+    assert 0 < seen[0] <= min(analysis_timeout, company_timeout)
+    assert result.run_status == "partial"
+    assert result.lead.intent_level == "high"
+    assert result.lead.company_name is None
+    assert any("最多" in message for message in messages)
 
 
 def test_successful_workflow_persists_fifteen_fields(tmp_path):

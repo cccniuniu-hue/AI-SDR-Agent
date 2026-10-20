@@ -39,8 +39,12 @@ def test_unknown_parts_contribute_zero_without_renormalizing_weights(
 
     result = assess_quality(
         Extraction(fact_evidence_ratio=fact_ratio),
-        CompanyResolution(selected_name="测试公司", status="confirmed", quality_score=company_score),
-        IntentDecision(level="high", reason="测试依据", evidence_score=intent_score, next_action="核查"),
+        CompanyResolution(
+            selected_name="测试公司", status="confirmed", quality_score=company_score
+        ),
+        IntentDecision(
+            level="high", reason="测试依据", evidence_score=intent_score, next_action="核查"
+        ),
     )
     assert result.confidence_score == expected
     assert result.need_human_review

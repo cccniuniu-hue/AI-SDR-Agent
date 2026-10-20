@@ -16,6 +16,20 @@ ACTIONS = {
 }
 
 
+def format_intent_reason(reason: str, signals: dict[str, Signal]) -> str:
+    details = [
+        f"{LABELS[k]}：" + signal.evidence[0].quote.rstrip("。；; \t\r\n")
+        for k, signal in signals.items()
+        if signal.value is not None and signal.evidence
+    ]
+    missing = [LABELS[k] for k, signal in signals.items() if signal.value is None]
+    if details:
+        reason += "\n依据：\n" + "；\n".join(details)
+    if missing:
+        reason += "\n未知：" + "、".join(missing) + "。"
+    return reason
+
+
 def score_intent(extraction: Extraction) -> IntentDecision:
     signals = {name: extraction.signals.get(name, Signal()) for name in WEIGHTS}
     known = {k: s.value for k, s in signals.items() if s.value is not None and not s.conflict}
@@ -54,19 +68,9 @@ def score_intent(extraction: Extraction) -> IntentDecision:
         level, reason = "medium", "已有多项正向需求信号，但不足以确认近期采购。"
     else:
         reason = "证据不足，不能将信息缺失等同于低意向。"
-    details = [
-        f"{LABELS[k]}：{s.evidence[0].quote}"
-        for k, s in signals.items()
-        if s.value is not None and s.evidence
-    ]
-    missing = [LABELS[k] for k, s in signals.items() if s.value is None]
-    if details:
-        reason += " 依据：" + "；".join(details)
-    if missing:
-        reason += " 未知：" + "、".join(missing) + "。"
     return IntentDecision(
         level=level,
-        reason=reason,
+        reason=format_intent_reason(reason, signals),
         signals=signals,
         score_lower=lower,
         score_upper=upper,

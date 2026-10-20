@@ -12,9 +12,10 @@ import streamlit as st
 from pydantic import ValidationError
 
 from .config import Settings
+from .intent import format_intent_reason
 from .repository import Repository
 from .review import ReviewError, ReviewService
-from .schemas import AnalysisInput, Lead
+from .schemas import AnalysisInput, Lead, Signal
 from .workflow import Workflow
 
 INTENTS = {None: "未知", "high": "高意向", "medium": "中意向", "low": "低意向"}
@@ -74,7 +75,11 @@ def shown(value):
 
 
 def timestamp_label(value):
-    return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M:%S")
+    return (
+        datetime.fromisoformat(value)
+        .astimezone(timezone(timedelta(hours=8)))
+        .strftime("%Y-%m-%d %H:%M:%S")
+    )
 
 
 def page_heading(title, description):
@@ -84,7 +89,71 @@ def page_heading(title, description):
     )
 
 
-def render_lead_summary(current):
+def intent_evidence_text(items, *, detailed=False):
+    lines = []
+    for item in items or []:
+        line = item["quote"]
+        if detailed:
+            speaker = {"customer": "客户", "sales": "销售", "unknown": "角色不明"}.get(
+                item.get("speaker"), "未知"
+            )
+            line = f"{speaker} · 第{item.get('turn_id', '?')}段：{line}"
+        lines.append(line)
+    return "\n".join(dict.fromkeys(lines))
+
+
+def intent_reason_table(current, analysis, *, detailed=False):
+    intent = (analysis or {}).get("intent") or {}
+    reason = current.get("intent_reason") or "暂无意向判断说明"
+    edited = bool(intent) and (
+        current.get("intent_reason") != intent.get("reason")
+        or current.get("intent_level") != intent.get("level")
+    )
+    if intent and not edited:
+        reason = re.split(r"\s+(?:依据|未知)：", reason, maxsplit=1)[0]
+    rows = [("人工核实说明" if edited else "判断说明", "—", reason)]
+    if intent:
+        for name, label in SIGNALS.items():
+            signal = (intent.get("signals") or {}).get(name) or {}
+            evidence = intent_evidence_text(signal.get("evidence"), detailed=detailed)
+            detail = evidence or "未提供明确依据"
+            if signal.get("conflict"):
+                detail = "存在冲突，需人工核查。\n" + detail
+            elif signal.get("value") is None and evidence:
+                detail = "尚无法判断。\n" + detail
+            value = "未知" if signal.get("value") is None else str(signal["value"])
+            rows.append((label, value, detail))
+        extraction = (analysis or {}).get("extraction") or {}
+        if extraction.get("refusal") and extraction.get("refusal_evidence"):
+            rows.append(
+                (
+                    "明确拒绝",
+                    "—",
+                    intent_evidence_text(extraction["refusal_evidence"], detailed=detailed),
+                )
+            )
+    body = "".join(
+        f'<tr><th scope="row">{escape(label)}</th>'
+        + (f"<td>{escape(value)}</td>" if detailed else "")
+        + f"<td>{escape(detail).replace(chr(10), '<br>')}</td></tr>"
+        for label, value, detail in rows
+    )
+    note = (
+        '<p class="intent-reason-note">维度行展示原始通话依据；人工修改内容见核实说明。</p>'
+        if edited
+        else ""
+    )
+    table_class = "intent-reason-table" + (" intent-signal-table" if detailed else "")
+    label = "意向信号" if detailed else "意向依据"
+    value_header = '<th scope="col">信号值</th>' if detailed else ""
+    return (
+        f'<table class="{table_class}" aria-label="{label}">'
+        f'<thead><tr><th scope="col">判断维度</th>{value_header}<th scope="col">原文与说明</th></tr></thead>'
+        f"<tbody>{body}</tbody></table>{note}"
+    )
+
+
+def render_lead_summary(current, analysis=None):
     groups = [
         (
             "企业与联系人",
@@ -105,9 +174,13 @@ def render_lead_summary(current):
         )
     for field in ("demand_summary", "intent_reason", "next_action"):
         accent = " action" if field == "next_action" else ""
+        content = (
+            intent_reason_table(current, analysis)
+            if field == "intent_reason"
+            else f"<p>{escape(shown(current[field]))}</p>"
+        )
         cards.append(
-            f'<section class="detail-card full{accent}"><h4>{FIELDS[field]}</h4>'
-            f"<p>{escape(shown(current[field]))}</p></section>"
+            f'<section class="detail-card full{accent}"><h4>{FIELDS[field]}</h4>{content}</section>'
         )
     st.markdown('<div class="detail-grid">' + "".join(cards) + "</div>", unsafe_allow_html=True)
 
@@ -292,6 +365,22 @@ def render_preview(repo, key, label):
 
 def edit_form(repo, run):
     current, original = run["current"], run["original"] or {}
+    company = (run.get("analysis") or {}).get("company") or {}
+    company_names = [current["company_name"]] if current["company_name"] else []
+    for candidate in company.get("candidates") or []:
+        name = (candidate.get("name") or "").strip()
+        if name and name not in company_names:
+            company_names.append(name)
+    company_key = f"review_company_{run['run_id']}_{run['version']}"
+    if company_key not in st.session_state:
+        st.session_state[company_key] = current["company_name"]
+    intent = (run.get("analysis") or {}).get("intent") or {}
+    intent_reason = current["intent_reason"] or ""
+    if intent.get("signals") and intent_reason == intent.get("reason"):
+        intent_reason = format_intent_reason(
+            re.split(r"\s+(?:依据|未知)：", intent_reason, maxsplit=1)[0],
+            {name: Signal.model_validate(intent["signals"].get(name) or {}) for name in SIGNALS},
+        )
     st.caption("空白字段保存为 null。置信度保留原始评估；人工审核状态另行记录。")
     score = original.get("confidence_score")
     st.text(f"原始置信度：{score:.0%}" if score is not None else "原始置信度：未知")
@@ -313,7 +402,17 @@ def edit_form(repo, run):
             st.markdown("##### " + title)
             for row in rows:
                 for col, field in zip(st.columns(len(row)), row, strict=True):
-                    if field == "call_time":
+                    if field == "company_name":
+                        values[field] = col.selectbox(
+                            FIELDS[field],
+                            company_names,
+                            index=None,
+                            key=company_key,
+                            accept_new_options=True,
+                            placeholder="选择候选公司，或输入企业全称",
+                            help="选项来自本条线索的企业核实候选，仍需人工核对。输入其他企业全称后按回车；清空后保存为 null。",
+                        )
+                    elif field == "call_time":
                         with col:
                             values[field] = call_time_picker(
                                 "通话日期",
@@ -333,7 +432,11 @@ def edit_form(repo, run):
             format_func=INTENTS.get,
         )
         for field in ("intent_reason", "demand_summary", "next_action"):
-            values[field] = st.text_area(FIELDS[field], value=current[field] or "", height=90)
+            values[field] = st.text_area(
+                FIELDS[field],
+                value=intent_reason if field == "intent_reason" else current[field] or "",
+                height=260 if field == "intent_reason" else 90,
+            )
         st.markdown("##### 审核确认")
         reviewer = st.text_input("审核人")
         reason = st.text_area("修正 / 核实说明", height=90)
@@ -438,31 +541,48 @@ def render_evidence(analysis):
             )
             st.text(candidate.get("quote") or "暂无来源摘录")
             if candidate.get("relation_quote"):
-                st.text("主体关系：" + candidate["relation_quote"])
+                with st.expander("查看主体关系依据"):
+                    st.text(candidate["relation_quote"])
+                    source_link(
+                        "查看主体关系来源",
+                        candidate.get("relation_source_url") or candidate.get("source_url"),
+                    )
             source_link("查看候选来源", candidate.get("source_url"))
+            if candidate.get("scope_evidence"):
+                with st.expander("查看范围核实依据"):
+                    for evidence in candidate["scope_evidence"]:
+                        st.text(evidence["content"])
+                        source_link("打开范围依据来源", evidence["url"])
     for evidence in company.get("evidence") or []:
         with st.expander(evidence.get("title") or "企业查询来源"):
             st.text(evidence.get("content", ""))
             source_link("打开来源网页", evidence.get("url"))
             st.caption("查询时间：" + (evidence.get("retrieved_at") or "未记录"))
     st.subheader("意向信号", anchor=False)
-    st.text(intent.get("reason") or "暂无意向判断依据")
-    if intent.get("score_lower") is not None:
-        st.caption(
-            f"可能得分区间：{intent['score_lower']:.2f} – {intent.get('score_upper', intent['score_lower']):.2f}；未知信号不按零分处理。"
-        )
-    for name, signal in (intent.get("signals") or {}).items():
-        with st.expander(SIGNALS.get(name, name) + " · " + shown(signal.get("value"))):
-            if signal.get("conflict"):
-                st.warning("该信号存在冲突，需要结合上下文复核。")
-            quotes(signal.get("evidence"))
+    st.markdown(
+        intent_reason_table(
+            {"intent_reason": intent.get("reason"), "intent_level": intent.get("level")},
+            analysis,
+            detailed=True,
+        ),
+        unsafe_allow_html=True,
+    )
+    st.caption("信号值为 0、0.5 或 1；未知表示该维度暂无明确依据，原始值保留为 null。")
+    lower, upper = intent.get("score_lower"), intent.get("score_upper")
+    if lower is not None and upper is not None:
+        if lower == upper:
+            st.caption(f"意向评分：{lower:g} / 100")
+        else:
+            st.caption(f"意向评分区间：{lower:g} – {upper:g} / 100；未知维度的贡献暂未确定。")
     st.subheader("事实与摘要依据", anchor=False)
     for field, fact in (extraction.get("facts") or {}).items():
         with st.expander(FIELDS.get(field, field) + " · " + shown(fact.get("value"))):
             if fact.get("approximate"):
                 st.caption("原文为近似描述。")
             quotes(fact.get("evidence"))
-    quotes(extraction.get("summary_evidence"))
+    if extraction.get("summary_evidence"):
+        st.markdown("##### 需求摘要的原文依据")
+        quotes(extraction["summary_evidence"])
     if extraction.get("refusal_evidence"):
         st.caption("明确拒绝依据")
         quotes(extraction["refusal_evidence"])
@@ -534,7 +654,7 @@ def render_run(repo, run):
         ["结果与原文", "证据与来源", "人工修正", "审核轨迹"]
     )
     with summary:
-        render_lead_summary(current)
+        render_lead_summary(current, analysis)
         with st.expander("通话原文"):
             st.text(run["transcript"])
         st.download_button(
@@ -577,22 +697,6 @@ def workbench(settings, repo):
         with input_col, st.container(key="input_card", border=False):
             st.subheader("通话文本", anchor=False)
             st.caption("保留说话人标记，帮助区分客户事实与销售介绍。")
-            examples_path = Path(__file__).resolve().parents[2] / "examples" / "transcripts.jsonl"
-            if examples_path.exists():
-                examples = [
-                    json.loads(line)
-                    for line in examples_path.read_text(encoding="utf-8").splitlines()
-                    if line.strip()
-                ]
-                with st.expander("用合成通话试一试"):
-                    choice = st.selectbox(
-                        "选择示例",
-                        range(len(examples)),
-                        format_func=lambda index: examples[index]["name"],
-                    )
-                    st.caption("以下示例均为合成文本，企业、人物和业务场景不代表真实记录。")
-                    if st.button("载入合成示例"):
-                        st.session_state["text"] = examples[choice]["transcript"]
             with st.form("analyze", border=False):
                 text = st.text_area(
                     "粘贴通话文本",
@@ -658,7 +762,7 @@ def workbench(settings, repo):
 
 
 def run_label(run):
-    return f"{(run['current'] or {}).get('company_name') or '待核实企业'} · {run['created_at'][:16]} · {run['run_id'][:8]}"
+    return f"{(run['current'] or {}).get('company_name') or '待核实企业'} · {timestamp_label(run['created_at'])[:16]} · {run['run_id'][:8]}"
 
 
 def batch_form(repo, runs):
@@ -729,6 +833,7 @@ def batch_form(repo, runs):
 
 def history_page(repo):
     page_heading("线索与审核", "集中查看分析结果，对照证据确认信息，保留每一次修正。")
+    st.caption("创建与审核时间均按北京时间（UTC+8）显示。")
     runs = repo.list_runs()
     with st.container(key="history_stats"):
         cols = st.columns(3)

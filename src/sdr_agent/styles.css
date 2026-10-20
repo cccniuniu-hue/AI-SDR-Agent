@@ -107,6 +107,14 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .detail-card dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .detail-card p { font-size: .875rem; line-height: 1.9; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
 .detail-card.full { grid-column: 1 / -1; }
+.intent-reason-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .875rem; line-height: 1.8; }
+.intent-reason-table th, .intent-reason-table td { padding: 12px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--sdr-line); overflow-wrap: anywhere; }
+.intent-reason-table th:first-child { width: 7em; }
+.intent-reason-table thead th { background: var(--sdr-sidebar); color: var(--sdr-ink); font-weight: 600; }
+.intent-reason-table tbody th { color: var(--sdr-muted); font-weight: 500; }
+.intent-reason-table tbody tr:last-child th, .intent-reason-table tbody tr:last-child td { border-bottom: 0; }
+.intent-signal-table th:nth-child(2), .intent-signal-table td:nth-child(2) { width: 5.5em; font-variant-numeric: tabular-nums; }
+.detail-card .intent-reason-note { margin-top: 12px; color: var(--sdr-muted); font-size: .8125rem; }
 .detail-card.action { background: var(--sdr-sage); border: 0; border-radius: var(--sdr-radius); padding: 20px; margin-top: 24px; }
 .evidence-quote { padding: 16px 20px; margin: 12px 0 20px; background: var(--sdr-sage); border: 0; border-radius: var(--sdr-radius); }
 .evidence-quote small { color: var(--sdr-muted); font-size: .75rem; }

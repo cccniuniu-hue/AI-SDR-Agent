@@ -48,3 +48,45 @@ def test_conflict_and_unknown_stay_unknown():
     result = score_intent(extracted())
     assert result.score_lower is None
     assert result.score_upper is None
+
+
+def test_intent_reason_uses_multiline_evidence_with_single_semicolon_separators():
+    from sdr_agent.intent import score_intent
+
+    quotes = {
+        "pain": "现在用的是别的软件，出图慢，而且跟工厂对接经常出错。",
+        "timeline": "最好下个月就能试一下；",
+        "budget": "预算的话，一年几万块我们能接受。； ",
+        "engagement": "行，你加这个手机号就行",
+        "scale": "设计部大概 15 个人。",
+    }
+    extraction = Extraction(
+        signals={
+            name: Signal(
+                value=0.5 if name == "engagement" else 1,
+                evidence=[
+                    Evidence(turn_id=1, speaker="customer", quote=quote),
+                ],
+            )
+            for name, quote in quotes.items()
+        }
+    )
+    result = score_intent(extraction)
+    assert result.reason == (
+        "明确痛点、时间或预算及推进信号支持高意向。\n"
+        "依据：\n"
+        "痛点：现在用的是别的软件，出图慢，而且跟工厂对接经常出错；\n"
+        "时间：最好下个月就能试一下；\n"
+        "预算：预算的话，一年几万块我们能接受；\n"
+        "行动：行，你加这个手机号就行；\n"
+        "规模：设计部大概 15 个人"
+    )
+    assert result.signals["budget"].evidence[0].quote == quotes["budget"]
+    assert result.score_lower == result.score_upper == 90
+
+
+def test_multiline_reason_keeps_unknown_signals_separate():
+    from sdr_agent.intent import score_intent
+
+    result = score_intent(extracted({"pain": 1}))
+    assert "\n依据：\n痛点：原句\n未知：时间、预算、行动、规模。" in result.reason

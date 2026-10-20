@@ -1,5 +1,6 @@
 """Small, synchronous DeepSeek adapter with bounded retries and safe errors."""
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -27,10 +28,11 @@ class DeepSeekError(Exception):
 
 
 class DeepSeekClient:
-    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None):
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
         self.settings = settings
         self.request_count = 0
-        self._http = httpx.Client(
+        self._runner = asyncio.Runner()
+        self._http = httpx.AsyncClient(
             base_url=settings.base_url.rstrip("/") + "/",
             headers={
                 "Authorization": f"Bearer {settings.api_key}",
@@ -43,7 +45,16 @@ class DeepSeekClient:
         )
 
     def close(self):
-        self._http.close()
+        if not self._http.is_closed:
+            try:
+                self._runner.run(self._http.aclose())
+            finally:
+                self._runner.close()
+
+    async def _post(self, path: str, payload: dict, timeout: float) -> httpx.Response:
+        # Inactivity timeouts alone allow a trickling response to run indefinitely.
+        async with asyncio.timeout(timeout):
+            return await self._http.post(path, json=payload, timeout=timeout)
 
     def __enter__(self):
         return self
@@ -61,12 +72,17 @@ class DeepSeekClient:
     def _request_json(self, path: str, payload: dict, deadline: float) -> dict:
         if not self.settings.api_key:
             raise DeepSeekError("missing_api_key", "尚未配置 DeepSeek API 密钥")
-        for attempt in range(3):
-            timeout = min(30.0, self.settings.timeout, self._remaining(deadline))
+        is_tool = path.startswith("v1/tools/")
+        attempts = 1 if is_tool else 3
+        for attempt in range(attempts):
+            timeout = min(
+                8.0 if is_tool else 30.0, self.settings.timeout, self._remaining(deadline)
+            )
             try:
                 self.request_count += 1
-                response = self._http.post(path, json=payload, timeout=timeout)
-            except (httpx.TimeoutException, httpx.TransportError):
+                response = self._runner.run(self._post(path, payload, timeout))
+            except (TimeoutError, httpx.TimeoutException, httpx.TransportError):
+                self._remaining(deadline)
                 error = DeepSeekError("provider_unavailable", "DeepSeek 请求超时或连接暂不可用")
             else:
                 self._remaining(deadline)
@@ -99,7 +115,7 @@ class DeepSeekClient:
                         "request_rejected", "DeepSeek 拒绝了请求，请检查模型和服务配置"
                     )
                 error = DeepSeekError("provider_unavailable", "DeepSeek 服务繁忙或暂不可用")
-            if attempt == 2:
+            if attempt == attempts - 1:
                 raise error from None
             delay = attempt + 1
             if self._remaining(deadline) <= delay:
@@ -225,6 +241,7 @@ class DeepSeekClient:
             prompt,
             {
                 "company_mention": extraction.company_mention,
+                "company_evidence": [item.model_dump() for item in extraction.company_evidence],
                 "area": extraction.facts.get("area").value
                 if extraction.facts.get("area")
                 else None,

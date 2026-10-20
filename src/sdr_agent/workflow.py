@@ -34,7 +34,13 @@ class Workflow:
         result = AnalysisResult(
             run_id=str(uuid.uuid4()),
             run_status="running",
-            versions={"model": self.settings.model, "prompt": "1.0", "scoring": "1.0", "quality": "2.0"},
+            versions={
+                "model": self.settings.model,
+                "prompt": "1.1",
+                "scoring": "1.0",
+                "quality": "2.0",
+                "company": "2.1",
+            },
         )
         client = self.client or DeepSeekClient(self.settings)
         before = getattr(client, "request_count", 0)
@@ -44,12 +50,16 @@ class Workflow:
             result.extraction = extraction
             intent = score_intent(extraction)
             result.intent = intent
-            self.progress("核实企业主体与候选来源")
+            self.progress(f"核实企业主体与候选来源（最多{self.settings.company_timeout:g}秒）")
             if time.monotonic() >= deadline:
                 company = CompanyResolution(status="unavailable", reason="分析时间预算已用尽")
             elif self.settings.search_enabled:
                 company = self.company_resolver(
-                    client, extraction, deadline, aliases=self.repository.aliases()
+                    client,
+                    extraction,
+                    min(deadline, time.monotonic() + self.settings.company_timeout),
+                    aliases=self.repository.aliases(),
+                    progress=self.progress,
                 )
             else:
                 company = CompanyResolution(

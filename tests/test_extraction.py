@@ -8,6 +8,19 @@ def ev(turn_id, quote, speaker="customer"):
     return Evidence(turn_id=turn_id, speaker=speaker, quote=quote)
 
 
+def test_company_context_keeps_explicit_self_alias_from_the_validated_customer_turn():
+    text = "我们叫清木，也叫青木，在杭州做定制家居。"
+    result = validate_extraction(
+        Extraction(company_mention="清木", company_evidence=[ev(1, "我们叫清木")]),
+        AnalysisInput(transcript="客户：" + text),
+    )
+    assert result.company_mention == "清木"
+    assert result.company_evidence[0].quote == text
+    from sdr_agent.company import company_mentions
+
+    assert company_mentions(result) == ["清木", "青木"]
+
+
 def test_split_turns_keeps_unlabeled_text_unknown():
     turns = split_turns("通话开始\n销售：您是张总吗？\n客户：对，是我。\n我们在杭州。")
     assert [(t.turn_id, t.speaker, t.text) for t in turns] == [

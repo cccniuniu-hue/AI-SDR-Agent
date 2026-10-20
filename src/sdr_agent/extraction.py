@@ -203,6 +203,13 @@ def validate_extraction(extraction: Extraction, input: AnalysisInput) -> Extract
     ):
         result.company_mention = None
         result.warnings.append("企业提及缺少客户直接证据，已置空")
+    elif result.company_mention:
+        # Keep self-aliases and denials that a model's shorter citation may omit.
+        company_turns = dict.fromkeys(item.turn_id for item in result.company_evidence)
+        result.company_evidence = [
+            Evidence(turn_id=turn_id, speaker="customer", quote=turns[turn_id].text)
+            for turn_id in company_turns
+        ]
     for key, signal in result.signals.items():
         if signal.value is not None and not _all_evidence(signal.evidence, turns):
             signal.value = None

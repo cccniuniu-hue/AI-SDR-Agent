@@ -303,6 +303,7 @@ def _fingerprint(settings: Settings, mode: str) -> str:
         str(settings.search_enabled),
         str(settings.timeout),
         str(settings.analysis_timeout),
+        str(settings.company_timeout),
         BASELINE_PROMPT,
     ]
     for name in (

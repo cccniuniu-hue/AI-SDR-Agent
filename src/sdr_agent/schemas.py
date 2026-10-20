@@ -129,6 +129,8 @@ class CompanyCandidate(Model):
     source_url: str
     quote: str = ""
     relation_quote: str = ""
+    relation_source_url: str | None = None
+    scope_evidence: list[SearchResult] = Field(default_factory=list, max_length=5)
     area_match: bool = False
     industry_match: bool = False
     relation_supported: bool = False
